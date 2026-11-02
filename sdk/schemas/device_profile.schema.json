@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotcore.dev/schemas/device_profile.schema.json",
+  "title": "Device Profile",
+  "description": "A device_profiles record: the customer-editable mapping from a firmware's compact wire payload to its semantic meaning, plus the plottable-metric registry, an optional public projection, and the hardware platform selection.",
+  "type": "object",
+  "required": ["name"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique profile name."
+    },
+    "platform": {
+      "type": "string",
+      "description": "Hardware platform registry key (e.g. \"nordic-nrf91\"). Empty selects the default platform.",
+      "default": "nordic-nrf91"
+    },
+    "codec": {
+      "type": "string",
+      "description": "Optional uplink codec name for a non-default payload format. Empty uses the built-in strict-CBOR fast path."
+    },
+    "keys": {
+      "type": "object",
+      "description": "Overrides for the top-level telemetry CBOR keys. Any omitted field falls back to the reference default shown.",
+      "additionalProperties": false,
+      "properties": {
+        "transport": { "type": "string", "default": "1" },
+        "fw_version": { "type": "string", "default": "2" },
+        "ts": { "type": "string", "default": "3" },
+        "location": { "type": "string", "default": "4" },
+        "cell": { "type": "string", "default": "5" },
+        "wifi": { "type": "string", "default": "6" },
+        "wire_version": { "type": "string", "default": "7" },
+        "reset_report": { "type": "string", "default": "20" },
+        "vitals": { "type": "string", "default": "21" },
+        "crash": { "type": "string", "default": "22" },
+        "device_info": { "type": "string", "default": "23" }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "description": "Plottable-metric registry.",
+      "items": {
+        "type": "object",
+        "required": ["key", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "description": "Stringified integer CBOR key the metric arrives under." },
+          "name": { "type": "string", "description": "Stable machine name used in the public API." },
+          "label": { "type": "string", "description": "Human label for dashboards." },
+          "unit": { "type": "string", "description": "Display unit." }
+        }
+      }
+    },
+    "public_view": {
+      "type": ["object", "null"],
+      "description": "Optional unauthenticated projection served at /api/public/{slug}.",
+      "required": ["slug", "tag", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "type": "string", "description": "URL slug: /api/public/{slug}." },
+        "tag": { "type": "string", "description": "devices.tags key that opts a device into the view." },
+        "value": { "type": "string", "description": "Required value of that tag." }
+      }
+    }
+  }
+}

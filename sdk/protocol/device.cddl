@@ -1,0 +1,268 @@
+; joncloud device wire contract (RFC 8610 CDDL).
+; Wire version 1, spec revision 1.1. Read README.md for behavior, response
+; codes and compatibility rules. Every message travels as an OSCORE-protected
+; CoAP payload. Enum values shown are those of the reference platform
+; nordic-nrf91; top-level telemetry keys shown are the default profile keys.
+;
+; Drift guard: go/internal/platform/deviceapi/protocol_spec_test.go (and the
+; sibling tests in locsvc and agnss) parse this file and fail when it and the
+; Go code disagree. Keep one map member per line so they can read it.
+
+device-message = telemetry
+  / senml-pack
+  / envelope
+  / shadow-delta
+  / shadow-report
+  / fota-notice
+  / fota-report
+  / agnss-request
+  / pgps-request
+
+; ---------------------------------------------------------------- versioning
+
+; The newest major this server speaks. A device declares its own in
+; telemetry key 7. Absent means 1.
+wire-version-current = 1
+wire-version = uint .ge 1
+
+; ---------------------------------------------------------------- POST /t
+
+; Compact check-in and telemetry map, Content-Format 60 (or none).
+; Keys 1-7 and 20-23 are reserved; a device profile may move them.
+; Every other unsigned integer key is a product metric, stored verbatim.
+telemetry = {
+  ? 1 ^ => transport,
+  ? 2 ^ => fw-version,
+  ? 3 ^ => ts,
+  ? 4 ^ => location,
+  ? 5 ^ => cell,
+  ? 6 ^ => wifi,
+  ? 7 ^ => wire-version,
+  ? 20 ^ => reset-report,
+  ? 21 ^ => vitals,
+  ? 22 ^ => crash,
+  ? 23 ^ => device-info,
+  * uint => any,
+}
+
+transport = &(tn: 1, ntn: 2)
+fw-version = tstr
+ts = uint                                ; device clock, epoch seconds
+
+; SenML pack, Content-Format 112 (RFC 8428). Stored verbatim; carries no
+; check-in fields and no wire version.
+senml-pack = [+ senml-record]
+senml-record = { * any => any }         ; RFC 8428 labels
+
+; GNSS fix folded into telemetry. la and lo are required.
+location = {
+  ? "t" => fix-time,
+  "la" => lat,
+  "lo" => lon,
+  ? "ac" => accuracy-m,
+  ? "tf" => ttff-ms,
+  ? "al" => alt-m,
+  * tstr => any,
+}
+fix-time = uint                          ; epoch seconds
+lat = number                             ; degrees
+lon = number                             ; degrees
+accuracy-m = number
+ttff-ms = uint
+alt-m = number
+
+; Serving cell scan. Stored raw for cloud-side resolution.
+cell = {
+  ? "ci" ^ => cell-id,
+  ? "mcc" ^ => mcc,
+  ? "mnc" ^ => mnc,
+  ? "tac" ^ => tac,
+  ? "ea" ^ => earfcn,
+  ? "rp" ^ => rsrp,
+  ? "rq" ^ => rsrq,
+  ? "ta" ^ => timing-advance,
+  ? "nc" ^ => neighbor-cells,
+  * tstr => any,
+}
+cell-id = uint
+mcc = uint
+mnc = uint
+tac = uint
+earfcn = uint
+rsrp = int                               ; dBm
+rsrq = int                               ; dB
+timing-advance = uint
+neighbor-cells = [* neighbor-cell]       ; at most 10
+neighbor-cell = { * tstr => any }        ; ea, pci, rp, rq, td
+
+wifi = [* wifi-ap]                       ; at most 10
+wifi-ap = {
+  "m" => mac,
+  "r" => rssi,
+  * tstr => any,
+}
+mac = bstr .size 6
+rssi = int                               ; dBm
+
+; Boot report. At least one of hc and rs must be present.
+reset-report = {
+  ? "hc" => hw-cause,
+  ? "rs" => reset-reason,
+  ? "up" => prev-uptime-s,
+  ? "bc" => boot-count,
+  ? "cp" => crash-pending,
+  * tstr => any,
+}
+hw-cause = uint .bits hw-cause-bits
+hw-cause-bits = &(pin: 0, software: 1, brownout: 2, power_on: 3, watchdog: 4, debug: 5, security: 6, low_power_wake: 7, cpu_lockup: 8, parity: 9, pll: 10, clock: 11, hardware: 12, user: 13, temperature: 14)
+reset-reason = &(power_on: 0, watchdog: 1, fota: 2, fatal: 3, user: 4, brownout: 5, pin: 6, software: 7, debug: 8, unknown: 9, secure_fault: 10, at_monitor_heap: 11)
+prev-uptime-s = uint
+boot-count = uint
+crash-pending = bool
+
+; Vitals heartbeat. Must not be empty. Stored verbatim; the server reads no
+; sub-key. The reference firmware sends integers under the two-letter keys
+; listed in docs/OBSERVABILITY.md section 3.
+vitals = { + tstr => any }
+
+; Minimal crash report. pc is required.
+crash = {
+  "pc" => pc,
+  ? "ft" => fault-type,
+  ? "lr" => lr,
+  ? "rg" => registers,
+  ? "st" => stack,
+  ? "bi" => build-id,
+  ? "bc" => breadcrumbs,
+  * tstr => any,
+}
+pc = uint
+fault-type = uint                        ; Zephyr k_fatal_error reason
+lr = uint
+registers = [* uint]
+stack = [* uint]
+build-id = tstr                          ; GNU build-id, hex
+breadcrumbs = tstr                       ; newline-separated log lines
+
+; Static device identity, sent once per boot. Sub-keys are defined by the
+; platform; these are nordic-nrf91's.
+device-info = {
+  ? "bd" => board,
+  ? "mf" => modem-fw,
+  ? "im" => imei,
+  ? "ic" => iccid,
+  * tstr => any,
+}
+board = tstr
+modem-fw = tstr
+imei = tstr
+iccid = tstr
+
+; ---------------------------------------------------------------- downlink
+
+; Queue-mode envelope: the payload of a 2.04 answer to POST /t, POST /s and
+; POST /f. No payload at all means nothing is pending.
+envelope = {
+  ? 1 => pending-flags,
+  ? 2 => inline-delta,
+}
+pending-flags = uint .bits pending-flag-bits
+pending-flag-bits = &(shadow-delta: 0, fota-job: 1)
+inline-delta = shadow-delta              ; only when it encodes to 64 bytes or less
+
+; ---------------------------------------------------------------- /s
+
+; GET /s answer (2.05) and the inline envelope delta.
+shadow-delta = {
+  1 => desired-version,
+  2 => shadow-diff,
+}
+desired-version = uint
+shadow-diff = { * tstr => any }
+
+; POST /s request.
+shadow-report = {
+  1 => reported-version,
+  ? 2 => reported-state,
+}
+reported-version = uint
+reported-state = { * tstr => any }       ; shallow-merged into reported
+
+; ---------------------------------------------------------------- /f
+
+; GET /f answer (2.05) when a job is active.
+fota-notice = {
+  1 => fota-job-id,
+  2 => image-version,
+  3 => image-size,
+  4 => image-sha256,
+  5 => image-type,
+}
+fota-job-id = tstr
+image-version = tstr
+image-size = uint                        ; bytes
+image-sha256 = bstr .size 32
+image-type = &(application: 1, modem_delta: 2, modem_full: 3, bootloader: 4)
+
+; POST /f request.
+fota-report = {
+  1 => fota-state,
+  ? 2 => progress-blocks,
+  ? 3 => fota-error,
+}
+fota-state = &(pending: 1, notified: 2, downloading: 3, downloaded: 4, applying: 5, succeeded: 6, failed: 7, cancelled: 8, timed_out: 9)
+progress-blocks = uint
+fota-error = tstr
+
+; ---------------------------------------------------------------- /a and /p
+
+; POST /a request (block 0 only). Response bodies are specified in
+; docs/agnss-schema.md sections 1.2 and 1.4.
+agnss-request = {
+  "t" => agnss-types,
+  ? "lat" => lat,
+  ? "lon" => lon,
+  ? "unc" => uncertainty-m,
+  ? "gt" => gps-time,
+  ? "mcc" => mcc,
+  ? "mnc" => mnc,
+  ? "tac" => tac,
+  ? "ci" => cell-id,
+  ? "rp" => rsrp,
+  ? "ta" => timing-advance,
+  ? "w" => window-s,
+  ? "n" => max-sv,
+  ? "e" => agnss-encoding,
+  ? "all" => all-sv,
+  * tstr => any,
+}
+agnss-types = uint .bits agnss-type-bits
+agnss-type-bits = &(utc: 0, ephemeris: 1, almanac: 2, klobuchar: 3, nequick: 4, system-clock: 5, location: 6, integrity: 7)
+uncertainty-m = uint
+gps-time = uint
+window-s = uint                          ; 0 = single shot
+max-sv = uint                            ; 0 = uncapped
+agnss-encoding = &(text-keys: 0, compact: 1)
+all-sv = bool / uint
+
+; POST /p request (block 0 only). Response body: docs/agnss-schema.md 3.2.
+pgps-request = {
+  ? "from" => pgps-from,
+  ? "n" => pgps-count,
+  ? "at" => pgps-at,
+  ? "have" => pgps-have,
+  ? "gen" => pgps-gen,
+  ? "lat" => lat,
+  ? "lon" => lon,
+  ? "unc" => uncertainty-m,
+  ? "m" => max-sv,
+  ? "mov" => moving,
+  ? "all" => all-sv,
+  * tstr => any,
+}
+pgps-from = uint                         ; GPS seconds
+pgps-count = uint                        ; 4 h windows, default 6, max 84
+pgps-at = [* uint]                       ; GPS seconds
+pgps-have = [* uint]                     ; iode values held
+pgps-gen = uint
+moving = bool / uint

@@ -1,0 +1,10 @@
+{
+  "name": "acme-thermo",
+  "platform": "acme-thermo",
+  "codec": "acme-json",
+  "metrics": [
+    { "key": "10", "name": "battery",     "label": "Battery",     "unit": "%" },
+    { "key": "11", "name": "temperature", "label": "Temperature", "unit": "\u00b0C" },
+    { "key": "12", "name": "humidity",    "label": "Humidity",    "unit": "%" }
+  ]
+}

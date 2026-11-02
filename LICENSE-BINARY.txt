@@ -1,0 +1,156 @@
+oscore-server (iotcore) — BINARY LICENSE
+=======================================
+
+Copyright (c) 2026 Equital AS. All rights reserved.
+
+This Binary License ("License") is between Equital AS, Norwegian
+organisation number 825 535 292 ("Licensor"), and you, the person or
+organisation that installs or uses the Software ("you"). By installing or
+using the Software you accept this License.
+
+In short: the prebuilt server is free to use for any purpose, on any number
+of devices, with no warranty. You may not modify or rebrand the binary, or
+resell it as a general IoT platform service. Source code access, warranty and
+support are available under a separate commercial agreement.
+
+1. DEFINITIONS
+
+   "Software" means the oscore-server (also called iotcore) server in binary
+   form, including its Docker images, as published by Licensor at
+   https://github.com/joncloud-dev/oscore-server/releases and
+   ghcr.io/joncloud-dev/oscore-server (the "Official Distribution"), and any
+   documentation shipped with it.
+
+   "Extensions" means the files you supply to the Software through its
+   extension interfaces: pb_hooks, pb_migrations, device profiles, static
+   assets (pb_public / PB_UI_DIR) and configuration.
+
+   "Your Services" means any product or service you offer that uses the
+   Software, including operating it for your customers, students or members.
+
+2. LICENSE GRANT
+
+   Licensor grants you a free, non-exclusive, worldwide, royalty-free license,
+   for as long as you comply with this License, to:
+
+   (a) install, run and use the Software for any purpose, including
+       commercial, educational, research and personal purposes;
+   (b) use it with any number of devices, users, instances and servers;
+   (c) run it on infrastructure you own, rent or control, and operate it as
+       part of Your Services, including hosting it on behalf of third parties
+       such as customers, schools or municipalities;
+   (d) make the copies needed for the above, including backups and container
+       images derived only by adding your Extensions or configuration; and
+   (e) let your employees, contractors and service providers do the above on
+       your behalf.
+
+   No fee, registration or order is required.
+
+3. RESTRICTIONS
+
+   You may not:
+
+   (a) modify, patch or create derivative works of the Software's binary
+       code, except by adding Extensions through the interfaces described in
+       its documentation;
+   (b) reverse engineer, decompile or disassemble the Software, except to the
+       extent applicable law expressly permits this despite a contractual
+       restriction (for example, for interoperability under Directive
+       2009/24/EC and the Norwegian Copyright Act);
+   (c) distribute the Software on its own, or sell, rent or sublicense it as
+       a standalone product, or offer it under your own name or brand as an
+       IoT server product ("white-labelling");
+   (d) remove or alter copyright, license or attribution notices;
+   (e) use the Software in breach of applicable law; or
+   (f) offer the Software to third parties as a general-purpose,
+       multi-customer IoT platform service whose primary value is the
+       Software itself.
+
+   You may distribute the unmodified Software from the Official Distribution
+   as part of a larger product or deployment (for example a docker-compose
+   file, a device appliance image or a classroom kit), provided this License
+   accompanies it and your recipients receive it under this License.
+
+4. EXTENSIONS
+
+   You own your Extensions. This License places no restrictions on them; you
+   may use, license, sell and share them freely. Example extensions and the
+   extension SDK published by Licensor are licensed under the MIT License
+   (see LICENSE in the distribution repository).
+
+5. SOURCE CODE AND COMMERCIAL LICENSES
+
+   The Software is provided in binary form only. Access to the source code,
+   the right to modify and build it, warranty, support and service levels are
+   available under a separate written agreement with Licensor. Nothing in this
+   License obliges you to obtain one, or obliges Licensor to offer one.
+
+6. UPDATES AND SUPPORT
+
+   Licensor may, but need not, publish updates. Each release is licensed
+   under the version of this License that accompanies it. Licensor provides
+   no support under this License. Community help may be available through the
+   distribution repository's issue tracker.
+
+7. DATA
+
+   You decide what data your deployment collects and processes, and you are
+   responsible for it, including under the GDPR. The Software does not send
+   usage data or device data to Licensor.
+
+   By default the Software fetches GNSS assistance data from Google's public
+   SUPL server (supl.google.com). That request carries no device data; you
+   can point it elsewhere (AGNSS_SLP_HOST) or turn it off (AGNSS_DISABLE=1).
+   Optional third-party services you configure, such as the Google
+   Geolocation API, GNSS product archives (for example NASA CDDIS, IGS and
+   AIUB) and NTRIP casters, receive data from your deployment under their own
+   terms. The Software's bundled web pages load scripts and map tiles from
+   public CDNs and map providers in the viewer's browser.
+
+8. THIRD-PARTY COMPONENTS
+
+   The Software includes open-source components under their own licenses,
+   listed in THIRD_PARTY_NOTICES.txt. Nothing in this License limits your
+   rights under those licenses with respect to those components.
+
+9. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE AND NON-INFRINGEMENT, TO THE MAXIMUM EXTENT PERMITTED BY LAW. YOU
+   ARE RESPONSIBLE FOR DECIDING WHETHER THE SOFTWARE SUITS YOUR USE, AND FOR
+   SECURING, BACKING UP AND OPERATING YOUR DEPLOYMENT.
+
+10. LIMITATION OF LIABILITY
+
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR IS NOT LIABLE FOR ANY
+   DIRECT, INDIRECT, INCIDENTAL, SPECIAL OR CONSEQUENTIAL DAMAGES, INCLUDING
+   LOSS OF DATA, PROFITS OR BUSINESS, ARISING OUT OF THE USE OF OR INABILITY
+   TO USE THE SOFTWARE. THIS DOES NOT LIMIT LIABILITY FOR GROSS NEGLIGENCE,
+   WILFUL MISCONDUCT, OR ANY OTHER LIABILITY THAT CANNOT BE LIMITED UNDER
+   APPLICABLE LAW.
+
+11. TERMINATION
+
+   If you breach this License, Licensor may notify you in writing. If you do
+   not cure the breach within 30 days of the notice, your license terminates
+   and you must stop using the Software. A breach that cannot be cured, or a
+   repeated breach after a previous notice, terminates the license on notice.
+   Termination does not affect your rights in your Extensions or your data.
+
+12. CONSUMERS
+
+   If you are a consumer, you keep any rights that mandatory consumer law
+   gives you, and nothing in this License limits them.
+
+13. GOVERNING LAW AND VENUE
+
+   This License is governed by the laws of Norway, without regard to its
+   conflict-of-laws rules. Disputes are subject to the exclusive jurisdiction
+   of the Norwegian courts, with Oslo tingrett as the agreed venue, except
+   where mandatory law gives a consumer the right to sue in their home courts.
+
+14. CONTACT
+
+   Licensing questions, source code licenses and notices under this License:
+   Equital AS, jhnistad@gmail.com
