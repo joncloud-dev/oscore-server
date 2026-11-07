@@ -71,7 +71,7 @@ the shell), then reboot.
 | [`sdk/schemas/`](sdk/schemas/) | JSON Schema for `device_profiles` records |
 | [`sdk/protocol/`](sdk/protocol/) | The device wire contract (resources, CBOR keys, response codes) + CDDL |
 | [`examples/`](examples/) | Small extension examples (custom codec, CoAP route, platform) |
-| [`docs/`](docs/) | Extension-facing docs and the A-GNSS / P-GPS body schema |
+| [`docs/`](docs/) | Extension-facing docs and the A-GNSS body schema |
 
 ## Licensing
 

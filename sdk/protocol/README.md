@@ -5,7 +5,7 @@ covers every CoAP resource a device calls, every CBOR map it sends or
 receives, and every response code it must handle.
 
 - Wire version: **1**
-- Spec revision: **1.2**
+- Spec revision: **1.4**
 - Machine-readable shapes: [`device.cddl`](device.cddl) (RFC 8610 CDDL)
 - A-GNSS and P-GPS response bodies: `docs/agnss-schema.md` in the server
   repository (sections 1.2, 1.4 and 3.2)
@@ -25,7 +25,7 @@ show the default profile.
 6. [Queue-mode envelope](#queue-mode-envelope)
 7. [Shadow: GET and POST /s](#shadow-get-and-post-s)
 8. [FOTA: GET and POST /f, GET /f/i](#fota-get-and-post-f-get-fi)
-9. [Coredump upload: POST /c](#coredump-upload-post-c)
+9. [Coredump upload: POST /c/o and /c/d, legacy POST /c](#coredump-upload-post-co-and-cd-legacy-post-c)
 10. [A-GNSS and P-GPS: POST /a and POST /p](#a-gnss-and-p-gps-post-a-and-post-p)
 11. [Smoke resources: GET /hello and GET /time](#smoke-resources-get-hello-and-get-time)
 12. [Operator routes](#operator-routes)
@@ -170,7 +170,9 @@ change.
 | GET `/f` | none | 2.05, `fota-notice` or empty |
 | POST `/f` | `fota-report` | 2.04, `envelope` or empty |
 | GET `/f/i` | none, Block2 option | 2.05, image bytes (CF 42), Block2 |
-| POST `/c` | coredump bytes, Block1 option | 2.31 per block, 2.04 at the end |
+| POST `/c/o` | `coredump-open` | 2.04, `coredump-open-resp` |
+| POST `/c/d` | encoded coredump bytes, Block1 option | 2.31 per block, 2.04 at the end |
+| POST `/c` | coredump bytes, Block1 option (legacy) | 2.31 per block, 2.04 at the end |
 | POST `/a` | `agnss-request` in block 0 | 2.05, assistance CBOR, Block2 |
 | POST `/p` | `pgps-request` in block 0 | 2.05, predicted assistance CBOR, Block2 |
 | GET `/hello` | none | 2.05, `Hello World!` |
@@ -183,19 +185,21 @@ The names in the body columns are CDDL rules in `device.cddl`.
 
 | Code | Where | Meaning for the device | What to do |
 |---|---|---|---|
-| 2.04 Changed | POST /t, /s, /f, last block of /c | Accepted. Payload is an `envelope`, or empty when nothing is pending. | Act on the envelope. |
+| 2.04 Changed | POST /t, /s, /f, /c/o, last block of /c and /c/d | Accepted. Payload is an `envelope`, or empty when nothing is pending. | Act on the envelope. |
 | 2.05 Content | GET /s, /f, /f/i, /hello, /time; POST /a, /p | Here is the data. An empty 2.05 from GET /s or GET /f means nothing is pending. | Read the payload. |
-| 2.31 Continue | POST /c | Block stored, send the next one. | Send the next block. |
+| 2.31 Continue | POST /c, /c/d | Block stored, send the next one. | Send the next block. |
 | 4.00 Bad Request | any | The outer message could not be read, or the payload is malformed, or a rule was broken (illegal FOTA transition, no active FOTA job, unsupported Block2 size). On POST /t with a diagnostic payload: unsupported wire version. | Do not resend the same payload. For the version case, see [Unsupported major](#unsupported-major). |
 | 4.01 Unauthorized | any | The request is not OSCORE-protected, the kid is unknown, the sequence number was replayed, or decryption failed. The response is not OSCORE-protected. | Check your security context. After a replay, advance your sender sequence number. |
 | 4.04 Not Found | GET /f/i; unknown paths | No active FOTA job, or no such resource. | Stop the download. Check GET /f. |
 | 4.05 Method Not Allowed | /s, /f, /f/i, /a, /p, operator routes | Wrong method for the path. | Fix the firmware. |
 | 4.06 Not Acceptable | GET /f/i | The job's `allowed_transports` excludes your current bearer. Jobs default to `tn` only. | Retry the download on an allowed bearer. Report your bearer in key 1. |
-| 4.08 Request Entity Incomplete | POST /c, /a, /p | /c: a block arrived out of order. /a and /p: a block after 0 arrived but the server has no cached response for you. | Restart the transfer from block 0. |
-| 4.13 Request Entity Too Large | POST /c | The coredump would exceed 1 MiB. | Stop. Do not retry this coredump. |
+| 4.08 Request Entity Incomplete | POST /c, /c/d, /a, /p | /c: a block arrived out of order. /c/d: a block other than the next one the server needs. /a and /p: a block after 0 arrived but the server has no cached response for you. | /c, /a, /p: restart the transfer from block 0. /c/d: POST /c/o again and continue from the block it names. |
+| 4.12 Precondition Failed | POST /c/d | No open upload for you (expired, or never opened). | POST /c/o, then continue. |
+| 4.13 Request Entity Too Large | POST /c, /c/d | The coredump would exceed 1 MiB, or more bytes than `coredump-open` declared. | Stop. Do not retry this coredump. |
 | 5.00 Internal Server Error | any | Server fault, including a FOTA image whose type your platform does not support, and an operator route that failed or whose response would exceed its size limit. | Retry later with backoff. |
 | 5.02 Bad Gateway | POST /a | The upstream assistance source failed, or the request body could not be decoded. | Retry later. Check the request body. |
 | 5.03 Service Unavailable | POST /a, /p | A-GNSS or P-GPS is disabled on this server, or your platform has no GNSS codec. | Do not retry soon. Fall back to an unassisted fix. |
+| 5.03 Service Unavailable | POST /c, block 0 | 32 legacy uploads are already in flight. | Retry the upload later, from block 0. |
 | 5.03 Service Unavailable, Max-Age | POST /t, operator routes | The server's extension code is busy or ran out of time for this request. | Retry after Max-Age seconds (2 today). |
 
 Two code paths are worth knowing. POST /t, POST /s and POST /f answer 4.00
@@ -342,13 +346,46 @@ Repeating the current state is allowed. Any other move is 4.00. Reporting
 `succeeded` for an application image sets the device's `fw_version` to the
 image version.
 
-## Coredump upload: POST /c
+## Coredump upload: POST /c/o and /c/d, legacy POST /c
 
-POST /c uploads a full coredump as raw bytes in Block1 blocks, in order from
-block 0. Each block but the last gets 2.31. The last gets 2.04. The server
+A coredump is uploaded in two steps so a dropped link resumes instead of
+starting over.
+
+1. POST /c/o with a `coredump-open` map. Key 1 is the CRC-32 (IEEE) of the raw
+   dump and identifies it. Key 2 is the length of the bytes you will send and
+   key 4 how they are encoded. The server answers 2.04 with a
+   `coredump-open-resp`: key 1 is the Block1 number to send next (0 for a new
+   upload), key 2 is true when the server already holds this dump.
+2. POST /c/d with the encoded bytes in Block1 blocks of the size from key 9,
+   starting at the block number from step 1. Each block but the last gets
+   2.31. The last gets 2.04 once the server has decoded the dump and checked
+   its CRC. A CRC or decode failure gets 4.00 and the upload is discarded.
+
+When key 2 of the response is true, or after the final 2.04, erase the dump.
+The server keeps a partial upload for 14 days, across server restarts, and a
+new open with a different id replaces it. A block the server already has is
+acknowledged again, so a retransmit after a lost ack is safe.
+
+Encoding 1, ZRL1, is a byte run-length code. It opens with `ZRL1`, the raw
+length (u32 little-endian) and the raw CRC-32 (u32 little-endian). Then tokens
+follow: a byte `t` below 0x80 is followed by `t + 1` literal bytes; a byte `t`
+of 0x80 or more is followed by `lo` and `value`, and stands for
+`((t & 0x7F) << 8 | lo) + 4` copies of `value`. RAM dumps shrink to about a
+third.
+
+The server pairs the dump with the crash report of the same device and boot
+counter (key 5; an inline crash report gets the boot counter of the boot report
+in the same uplink minus one), received within 14 days. With no such report,
+for example because a power cycle lost it, the server creates a crash report
+from the dump itself.
+
+Legacy POST /c uploads a full coredump as raw bytes in Block1 blocks, in order
+from block 0. Each block but the last gets 2.31. The last gets 2.04. The server
 attaches the dump to the device's newest crash report without one, or creates
 a crash report. The limit is 1 MiB. A transfer with no new block for 5
-minutes is dropped. No Block1 option means the whole dump is in one request.
+minutes is dropped. The server assembles legacy uploads in RAM and takes at
+most 32 at a time; block 0 of another one gets 5.03. No Block1 option means the whole dump is in one request. A
+device that gets 4.04 from POST /c/o falls back to this path.
 
 The reference firmware uploads coredumps only on a terrestrial bearer. The
 server does not enforce this.
@@ -435,6 +472,12 @@ Run them with `go test ./internal/platform/... -run Spec` from `go/`.
 
 ## Changelog
 
+- **1.4**: reset reasons 12 `watchdog_task`, 13 `watchdog_hw_pre` and 14
+  `watchdog_hw_silent`. A watchdog expiry now ends in a coredump whose fatal
+  reason is 0x100 (task), 0x101 (hardware pre-watchdog) or 0x102 (cloud
+  liveness), and whose crash meta (v2) names the culprit thread.
+- **1.3**: resumable, compressed coredump upload (POST /c/o, POST /c/d) with
+  crash-report pairing by boot counter. POST /c stays for older firmware.
 - **1.2**: operator routes. A deployment may serve its own resources beside
   the core ones; the core reserves every one-character first path segment
   plus `/hello`, `/time` and `/.well-known`. POST /t and operator routes

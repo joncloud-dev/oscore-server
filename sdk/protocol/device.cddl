@@ -1,5 +1,5 @@
 ; joncloud device wire contract (RFC 8610 CDDL).
-; Wire version 1, spec revision 1.1. Read README.md for behavior, response
+; Wire version 1, spec revision 1.3. Read README.md for behavior, response
 ; codes and compatibility rules. Every message travels as an OSCORE-protected
 ; CoAP payload. Enum values shown are those of the reference platform
 ; nordic-nrf91; top-level telemetry keys shown are the default profile keys.
@@ -115,7 +115,7 @@ reset-report = {
 }
 hw-cause = uint .bits hw-cause-bits
 hw-cause-bits = &(pin: 0, software: 1, brownout: 2, power_on: 3, watchdog: 4, debug: 5, security: 6, low_power_wake: 7, cpu_lockup: 8, parity: 9, pll: 10, clock: 11, hardware: 12, user: 13, temperature: 14)
-reset-reason = &(power_on: 0, watchdog: 1, fota: 2, fatal: 3, user: 4, brownout: 5, pin: 6, software: 7, debug: 8, unknown: 9, secure_fault: 10, at_monitor_heap: 11)
+reset-reason = &(power_on: 0, watchdog: 1, fota: 2, fatal: 3, user: 4, brownout: 5, pin: 6, software: 7, debug: 8, unknown: 9, secure_fault: 10, at_monitor_heap: 11, watchdog_task: 12, watchdog_hw_pre: 13, watchdog_hw_silent: 14)
 prev-uptime-s = uint
 boot-count = uint
 crash-pending = bool
@@ -266,3 +266,24 @@ pgps-at = [* uint]                       ; GPS seconds
 pgps-have = [* uint]                     ; iode values held
 pgps-gen = uint
 moving = bool / uint
+
+; ---------------------------------------------------------------- POST /c/o
+; Open or resume a coredump upload. Response body: coredump-open-resp.
+coredump-open = {
+  1 => dump-id,
+  2 => uint,                             ; bytes sent on /c/d (encoded length)
+  3 => uint,                             ; raw dump length, at most 1 MiB
+  4 => dump-encoding,
+  ? 5 => uint,                           ; boot counter of the boot that crashed
+  ? 6 => uint,                           ; Zephyr fatal reason
+  ? 7 => bstr,                           ; GNU build-id of the crashing image
+  ? 8 => bool,                           ; dump hit the device's storage limit
+  ? 9 => uint,                           ; Block1 SZX for /c/d, default 6 (1024)
+}
+dump-id = uint                           ; CRC-32 (IEEE) of the raw dump
+dump-encoding = &(raw: 0, zrl1: 1)
+
+coredump-open-resp = {
+  1 => uint,                             ; next Block1 number to send on /c/d
+  2 => bool,                             ; server already holds this dump
+}
